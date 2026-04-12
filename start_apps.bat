@@ -3,11 +3,20 @@ setlocal
 
 set "WORKER_DIR=C:\ReplayTrove\worker"
 set "SCOREBOARD_DIR=C:\ReplayTrove\scoreboard"
-set "WORKER_PYTHON=%WORKER_DIR%\.venv\Scripts\python.exe"
-set "SCOREBOARD_PYTHON=%SCOREBOARD_DIR%\.venv\Scripts\python.exe"
+set "OBS_DIR=C:\Program Files\obs-studio\bin\64bit"
+set "WORKER_PYTHONW=%WORKER_DIR%\.venv\Scripts\pythonw.exe"
+set "SCOREBOARD_PYTHONW=%SCOREBOARD_DIR%\.venv\Scripts\pythonw.exe"
+set "OBS_EXE=%OBS_DIR%\obs64.exe"
+rem Never use --safe-mode here; we want full normal startup (plugins/scripts on).
+rem --disable-shutdown-check skips unclean-shutdown dialog on OBS versions that still support it.
+rem OBS 32+ removed that flag; removing .sentinel before launch is the usual workaround.
+set "OBS_ARGS=--disable-shutdown-check"
+set "OBS_SENTINEL=%APPDATA%\obs-studio\.sentinel"
+set "STREAMDECK_EXE=C:\Program Files\Elgato\StreamDeck\StreamDeck.exe"
 
 rem Interactive/default profile:
-set "LAUNCH_DELAY_SECONDS=2"
+set "LAUNCH_DELAY_SECONDS=10"
+set "SCOREBOARD_FOCUS_DELAY_SECONDS=2"
 set "PAUSE_ON_ERROR=1"
 rem Scheduler/non-interactive profile (optional):
 rem set "LAUNCH_DELAY_SECONDS=0"
@@ -28,13 +37,23 @@ if not exist "%SCOREBOARD_DIR%\main.py" (
     set "ERROR_FOUND=1"
 )
 
-if not exist "%WORKER_PYTHON%" (
-    echo [ERROR] Worker Python not found at "%WORKER_PYTHON%"
+if not exist "%WORKER_PYTHONW%" (
+    echo [ERROR] Worker PythonW not found at "%WORKER_PYTHONW%"
     set "ERROR_FOUND=1"
 )
 
-if not exist "%SCOREBOARD_PYTHON%" (
-    echo [ERROR] Scoreboard Python not found at "%SCOREBOARD_PYTHON%"
+if not exist "%SCOREBOARD_PYTHONW%" (
+    echo [ERROR] Scoreboard PythonW not found at "%SCOREBOARD_PYTHONW%"
+    set "ERROR_FOUND=1"
+)
+
+if not exist "%OBS_EXE%" (
+    echo [ERROR] OBS executable not found at "%OBS_EXE%"
+    set "ERROR_FOUND=1"
+)
+
+if not exist "%STREAMDECK_EXE%" (
+    echo [ERROR] Stream Deck executable not found at "%STREAMDECK_EXE%"
     set "ERROR_FOUND=1"
 )
 
@@ -44,12 +63,22 @@ if "%ERROR_FOUND%"=="1" (
 )
 
 echo Launching worker...
-start "ReplayTrove Worker" /D "%WORKER_DIR%" "%WORKER_PYTHON%" "main.py"
+start "ReplayTrove Worker" /D "%WORKER_DIR%" "%WORKER_PYTHONW%" "main.py"
+
+echo Launching OBS...
+if exist "%OBS_SENTINEL%" rd /s /q "%OBS_SENTINEL%" 2>nul
+start "OBS Studio" /MIN /D "%OBS_DIR%" "%OBS_EXE%" %OBS_ARGS%
+
+echo Launching Stream Deck...
+start "Elgato Stream Deck" /MIN "%STREAMDECK_EXE%"
 
 if not "%LAUNCH_DELAY_SECONDS%"=="0" timeout /t %LAUNCH_DELAY_SECONDS% >nul
 
 echo Launching scoreboard...
-start "ReplayTrove Scoreboard" /D "%SCOREBOARD_DIR%" "%SCOREBOARD_PYTHON%" "main.py"
+start "ReplayTrove Scoreboard" /D "%SCOREBOARD_DIR%" "%SCOREBOARD_PYTHONW%" "main.py"
 
-echo Both apps launched.
+start "" powershell -NoProfile -WindowStyle Hidden -Command "Start-Sleep -Seconds %SCOREBOARD_FOCUS_DELAY_SECONDS%; $ws=New-Object -ComObject WScript.Shell; [void]$ws.AppActivate('ReplayTrove Scoreboard')"
+start "" powershell -NoProfile -WindowStyle Hidden -Command "$sig='[DllImport(\"user32.dll\")] public static extern bool ShowWindowAsync(IntPtr hWnd,int nCmdShow);'; Add-Type -MemberDefinition $sig -Name Win32Show -Namespace Native; 1..20 | %% { Start-Sleep -Milliseconds 500; Get-Process StreamDeck -ErrorAction SilentlyContinue | ? { $_.MainWindowHandle -ne 0 } | %% { [Native.Win32Show]::ShowWindowAsync($_.MainWindowHandle, 2) | Out-Null } }"
+
+echo All apps launched.
 exit /b 0
