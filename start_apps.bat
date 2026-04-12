@@ -3,9 +3,12 @@ setlocal
 
 set "WORKER_DIR=C:\ReplayTrove\worker"
 set "SCOREBOARD_DIR=C:\ReplayTrove\scoreboard"
+set "LOGS2DROPBOX_DIR=C:\ReplayTrove\logs2dropbox"
+set "CLEANER_SCRIPT=C:\ReplayTrove\cleaner\cleaner-bee.ps1"
 set "OBS_DIR=C:\Program Files\obs-studio\bin\64bit"
 set "WORKER_PYTHONW=%WORKER_DIR%\.venv\Scripts\pythonw.exe"
 set "SCOREBOARD_PYTHONW=%SCOREBOARD_DIR%\.venv\Scripts\pythonw.exe"
+set "LOGS2DROPBOX_PYTHONW=%LOGS2DROPBOX_DIR%\.venv\Scripts\pythonw.exe"
 set "OBS_EXE=%OBS_DIR%\obs64.exe"
 rem Never use --safe-mode here; we want full normal startup (plugins/scripts on).
 rem --disable-shutdown-check skips unclean-shutdown dialog on OBS versions that still support it.
@@ -37,6 +40,16 @@ if not exist "%SCOREBOARD_DIR%\main.py" (
     set "ERROR_FOUND=1"
 )
 
+if not exist "%LOGS2DROPBOX_DIR%\main.py" (
+    echo [ERROR] logs2dropbox not found at "%LOGS2DROPBOX_DIR%\main.py"
+    set "ERROR_FOUND=1"
+)
+
+if not exist "%CLEANER_SCRIPT%" (
+    echo [ERROR] Cleaner Bee script not found at "%CLEANER_SCRIPT%"
+    set "ERROR_FOUND=1"
+)
+
 if not exist "%WORKER_PYTHONW%" (
     echo [ERROR] Worker PythonW not found at "%WORKER_PYTHONW%"
     set "ERROR_FOUND=1"
@@ -44,6 +57,11 @@ if not exist "%WORKER_PYTHONW%" (
 
 if not exist "%SCOREBOARD_PYTHONW%" (
     echo [ERROR] Scoreboard PythonW not found at "%SCOREBOARD_PYTHONW%"
+    set "ERROR_FOUND=1"
+)
+
+if not exist "%LOGS2DROPBOX_PYTHONW%" (
+    echo [ERROR] logs2dropbox PythonW not found at "%LOGS2DROPBOX_PYTHONW%"
     set "ERROR_FOUND=1"
 )
 
@@ -64,6 +82,12 @@ if "%ERROR_FOUND%"=="1" (
 
 echo Launching worker...
 start "ReplayTrove Worker" /D "%WORKER_DIR%" "%WORKER_PYTHONW%" "main.py"
+
+echo Launching logs2dropbox...
+start "ReplayTrove logs2dropbox" /D "%LOGS2DROPBOX_DIR%" "%LOGS2DROPBOX_PYTHONW%" "main.py"
+
+echo Launching Cleaner Bee...
+start "ReplayTrove Cleaner Bee" powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%CLEANER_SCRIPT%"
 
 echo Launching OBS...
 if exist "%OBS_SENTINEL%" rd /s /q "%OBS_SENTINEL%" 2>nul
