@@ -14,6 +14,11 @@ rem Never use --safe-mode here; we want full normal startup (plugins/scripts on)
 rem --disable-shutdown-check skips unclean-shutdown dialog on OBS versions that still support it.
 rem OBS 32+ removed that flag; removing .sentinel before launch is the usual workaround.
 set "OBS_ARGS=--disable-shutdown-check"
+rem Canonical scene export in ReplayTrove; OBS loads collections by name from Roaming\obs-studio\basic\scenes\
+rem (--collection uses the filename without .json, not a full path.)
+set "OBS_SCENE_COLLECTION_SRC=C:\ReplayTrove\obs scene collection.json"
+set "OBS_SCENE_COLLECTION_NAME=obs scene collection"
+set "OBS_SCENES_DIR=%APPDATA%\obs-studio\basic\scenes"
 set "OBS_SENTINEL=%APPDATA%\obs-studio\.sentinel"
 set "STREAMDECK_EXE=C:\Program Files\Elgato\StreamDeck\StreamDeck.exe"
 
@@ -70,6 +75,11 @@ if not exist "%OBS_EXE%" (
     set "ERROR_FOUND=1"
 )
 
+if not exist "%OBS_SCENE_COLLECTION_SRC%" (
+    echo [ERROR] OBS scene collection not found at "%OBS_SCENE_COLLECTION_SRC%"
+    set "ERROR_FOUND=1"
+)
+
 if not exist "%STREAMDECK_EXE%" (
     echo [ERROR] Stream Deck executable not found at "%STREAMDECK_EXE%"
     set "ERROR_FOUND=1"
@@ -91,7 +101,14 @@ start "ReplayTrove Cleaner Bee" powershell.exe -NoProfile -WindowStyle Hidden -E
 
 echo Launching OBS...
 if exist "%OBS_SENTINEL%" rd /s /q "%OBS_SENTINEL%" 2>nul
-start "OBS Studio" /MIN /D "%OBS_DIR%" "%OBS_EXE%" %OBS_ARGS%
+if not exist "%OBS_SCENES_DIR%" mkdir "%OBS_SCENES_DIR%" 2>nul
+copy /Y "%OBS_SCENE_COLLECTION_SRC%" "%OBS_SCENES_DIR%\%OBS_SCENE_COLLECTION_NAME%.json" >nul
+if errorlevel 1 (
+    echo [ERROR] Failed to copy scene collection into "%OBS_SCENES_DIR%"
+    if "%PAUSE_ON_ERROR%"=="1" pause
+    exit /b 1
+)
+start "OBS Studio" /MIN /D "%OBS_DIR%" "%OBS_EXE%" %OBS_ARGS% --collection "%OBS_SCENE_COLLECTION_NAME%"
 
 echo Launching Stream Deck...
 start "Elgato Stream Deck" /MIN "%STREAMDECK_EXE%"
