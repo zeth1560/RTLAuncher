@@ -1,0 +1,4 @@
+﻿[2026-04-13 16:17:08.149] ReplayTrove launcher starting (supervisor). Log: C:\ReplayTrove\launcher\logs\launcher-20260413-161708.log
+[2026-04-13 16:17:08.167] Mode: PRODUCTION (pythonw.exe)
+[2026-04-13 16:17:08.170] SKIP: logs2dropbox (REPLAYTROVE_SKIP_LOGS2DROPBOX=1)
+[2026-04-13 16:17:08.172] SKIP: Cleaner Bee (REPLAYTROVE_SKIP_CLEANER_BEE=1)

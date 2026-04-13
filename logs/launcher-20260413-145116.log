@@ -1,0 +1,3 @@
+﻿[2026-04-13 14:51:16.953] ReplayTrove launcher starting (supervisor). Log: C:\ReplayTrove\launcher\logs\launcher-20260413-145116.log
+[2026-04-13 14:51:16.981] Mode: PRODUCTION (pythonw.exe)
+[2026-04-13 14:51:16.991] PREFLIGHT FAIL: logs2dropbox main.py not found at C:\ReplayTrove\logs2dropbox\main.py

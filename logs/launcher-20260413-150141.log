@@ -1,0 +1,22 @@
+﻿[2026-04-13 15:01:41.687] ReplayTrove launcher starting (supervisor). Log: C:\ReplayTrove\launcher\logs\launcher-20260413-150141.log
+[2026-04-13 15:01:41.703] Mode: PRODUCTION (pythonw.exe)
+[2026-04-13 15:01:41.706] SKIP: logs2dropbox (REPLAYTROVE_SKIP_LOGS2DROPBOX=1)
+[2026-04-13 15:01:41.708] SKIP: Cleaner Bee (REPLAYTROVE_SKIP_CLEANER_BEE=1)
+[2026-04-13 15:01:41.733] OBS sentinel removed: C:\Users\seth\AppData\Roaming\obs-studio\.sentinel
+[2026-04-13 15:01:41.735] Launching worker...
+[2026-04-13 15:01:42.168] Readiness OK: Worker (python main.py) (0.349s)
+[2026-04-13 15:01:42.172] Launching OBS...
+[2026-04-13 15:01:42.188] Launching Stream Deck...
+[2026-04-13 15:01:42.258] Readiness OK: OBS (obs64) (0.021s)
+[2026-04-13 15:01:42.261] Launching scoreboard...
+[2026-04-13 15:01:42.600] Readiness OK: Scoreboard (python main.py) (0.248s)
+[2026-04-13 15:01:43.604] Post-launch validation...
+[2026-04-13 15:01:43.807] Validation: Worker = OK
+[2026-04-13 15:01:43.996] Validation: Scoreboard = OK
+[2026-04-13 15:01:44.014] Validation: OBS = OK
+[2026-04-13 15:01:44.059] Validation: StreamDeck = OK
+[2026-04-13 15:01:44.062] Validation: Cleaner Bee = skipped
+[2026-04-13 15:01:44.064] Post-launch validation passed; UI focus/minimize...
+[2026-04-13 15:02:04.427] Scoreboard focus: AppActivate('ReplayTrove Scoreboard') failed after 40 attempts
+[2026-04-13 15:02:04.710] Stream Deck minimize: ShowWindowAsync attempt 1, hwnd=17637214, result=True
+[2026-04-13 15:02:04.713] All apps launched and validated.

@@ -1,125 +1,36 @@
 @echo off
-setlocal
+setlocal EnableExtensions
 
-set "WORKER_DIR=C:\ReplayTrove\worker"
-set "SCOREBOARD_DIR=C:\ReplayTrove\scoreboard"
-set "LOGS2DROPBOX_DIR=C:\ReplayTrove\logs2dropbox"
-set "CLEANER_SCRIPT=C:\ReplayTrove\cleaner\cleaner-bee.ps1"
-set "OBS_DIR=C:\Program Files\obs-studio\bin\64bit"
-set "WORKER_PYTHONW=%WORKER_DIR%\.venv\Scripts\pythonw.exe"
-set "SCOREBOARD_PYTHONW=%SCOREBOARD_DIR%\.venv\Scripts\pythonw.exe"
-set "LOGS2DROPBOX_PYTHONW=%LOGS2DROPBOX_DIR%\.venv\Scripts\pythonw.exe"
-set "OBS_EXE=%OBS_DIR%\obs64.exe"
-rem Never use --safe-mode here; we want full normal startup (plugins/scripts on).
-rem --disable-shutdown-check skips unclean-shutdown dialog on OBS versions that still support it.
-rem OBS 32+ removed that flag; removing .sentinel before launch is the usual workaround.
-set "OBS_ARGS=--disable-shutdown-check"
-rem Canonical scene export in ReplayTrove; OBS loads collections by name from Roaming\obs-studio\basic\scenes\
-rem (--collection uses the filename without .json, not a full path.)
-set "OBS_SCENE_COLLECTION_SRC=C:\ReplayTrove\obs scene collection.json"
-set "OBS_SCENE_COLLECTION_NAME=obs scene collection"
-set "OBS_SCENES_DIR=%APPDATA%\obs-studio\basic\scenes"
-set "OBS_SENTINEL=%APPDATA%\obs-studio\.sentinel"
-set "STREAMDECK_EXE=C:\Program Files\Elgato\StreamDeck\StreamDeck.exe"
+rem ReplayTrove launcher: sets paths and env, then runs supervisor (start_apps.ps1).
+rem Uses powershell.exe consistently for all PowerShell work.
+rem OBS %APPDATA%\obs-studio\.sentinel cleanup is done in start_apps.ps1 (Remove-Item -Force, same intent as del /f /q).
 
-rem Interactive/default profile:
-set "LAUNCH_DELAY_SECONDS=10"
-set "SCOREBOARD_FOCUS_DELAY_SECONDS=2"
-set "PAUSE_ON_ERROR=1"
-rem Scheduler/non-interactive profile (optional):
-rem set "LAUNCH_DELAY_SECONDS=0"
-rem set "PAUSE_ON_ERROR=0"
+rem --- Paths (override here if your install differs) ---
+set "REPLAYTROVE_WORKER_DIR=C:\ReplayTrove\worker"
+set "REPLAYTROVE_SCOREBOARD_DIR=C:\ReplayTrove\scoreboard"
+set "REPLAYTROVE_LOGS2DROPBOX_DIR=C:\ReplayTrove\logs2dropbox"
+set "REPLAYTROVE_CLEANER_SCRIPT=C:\ReplayTrove\cleaner\cleaner-bee.ps1"
+set "REPLAYTROVE_OBS_DIR=C:\Program Files\obs-studio\bin\64bit"
+set "REPLAYTROVE_OBS_EXE=%REPLAYTROVE_OBS_DIR%\obs64.exe"
+set "REPLAYTROVE_OBS_SENTINEL=%APPDATA%\obs-studio\.sentinel"
+set "REPLAYTROVE_STREAMDECK_EXE=C:\Program Files\Elgato\StreamDeck\StreamDeck.exe"
 
-set "ERROR_FOUND=0"
+rem --- Modes ---
+rem Interactive default: pause on preflight/validation failure.
+rem For Task Scheduler, set REPLAYTROVE_PAUSE_ON_ERROR=0 before calling this batch (or uncomment below).
+set "REPLAYTROVE_PAUSE_ON_ERROR=1"
+rem set "REPLAYTROVE_PAUSE_ON_ERROR=0"
 
-echo ReplayTrove launcher starting...
-echo Delay=%LAUNCH_DELAY_SECONDS%s  PauseOnError=%PAUSE_ON_ERROR%
+rem Production uses pythonw.exe (no consoles). For visible Python errors use debug:
+rem set "REPLAYTROVE_LAUNCHER_DEBUG=1"
 
-if not exist "%WORKER_DIR%\main.py" (
-    echo [ERROR] Worker app not found at "%WORKER_DIR%\main.py"
-    set "ERROR_FOUND=1"
-)
+rem Optional tuning — see start_apps.ps1 for meaning (seconds / milliseconds).
+rem set "REPLAYTROVE_READINESS_OBS_SEC=120"
+rem set "REPLAYTROVE_READINESS_PYTHON_SEC=90"
+rem set "REPLAYTROVE_READINESS_INTERVAL_SEC=1"
+rem set "REPLAYTROVE_FOCUS_MAX_ATTEMPTS=40"
+rem set "REPLAYTROVE_FOCUS_RETRY_MS=500"
 
-if not exist "%SCOREBOARD_DIR%\main.py" (
-    echo [ERROR] Scoreboard app not found at "%SCOREBOARD_DIR%\main.py"
-    set "ERROR_FOUND=1"
-)
-
-if not exist "%LOGS2DROPBOX_DIR%\main.py" (
-    echo [ERROR] logs2dropbox not found at "%LOGS2DROPBOX_DIR%\main.py"
-    set "ERROR_FOUND=1"
-)
-
-if not exist "%CLEANER_SCRIPT%" (
-    echo [ERROR] Cleaner Bee script not found at "%CLEANER_SCRIPT%"
-    set "ERROR_FOUND=1"
-)
-
-if not exist "%WORKER_PYTHONW%" (
-    echo [ERROR] Worker PythonW not found at "%WORKER_PYTHONW%"
-    set "ERROR_FOUND=1"
-)
-
-if not exist "%SCOREBOARD_PYTHONW%" (
-    echo [ERROR] Scoreboard PythonW not found at "%SCOREBOARD_PYTHONW%"
-    set "ERROR_FOUND=1"
-)
-
-if not exist "%LOGS2DROPBOX_PYTHONW%" (
-    echo [ERROR] logs2dropbox PythonW not found at "%LOGS2DROPBOX_PYTHONW%"
-    set "ERROR_FOUND=1"
-)
-
-if not exist "%OBS_EXE%" (
-    echo [ERROR] OBS executable not found at "%OBS_EXE%"
-    set "ERROR_FOUND=1"
-)
-
-if not exist "%OBS_SCENE_COLLECTION_SRC%" (
-    echo [ERROR] OBS scene collection not found at "%OBS_SCENE_COLLECTION_SRC%"
-    set "ERROR_FOUND=1"
-)
-
-if not exist "%STREAMDECK_EXE%" (
-    echo [ERROR] Stream Deck executable not found at "%STREAMDECK_EXE%"
-    set "ERROR_FOUND=1"
-)
-
-if "%ERROR_FOUND%"=="1" (
-    if "%PAUSE_ON_ERROR%"=="1" pause
-    exit /b 1
-)
-
-echo Launching worker...
-start "ReplayTrove Worker" /D "%WORKER_DIR%" "%WORKER_PYTHONW%" "main.py"
-
-echo Launching logs2dropbox...
-start "ReplayTrove logs2dropbox" /D "%LOGS2DROPBOX_DIR%" "%LOGS2DROPBOX_PYTHONW%" "main.py"
-
-echo Launching Cleaner Bee...
-start "ReplayTrove Cleaner Bee" powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%CLEANER_SCRIPT%"
-
-echo Launching OBS...
-if exist "%OBS_SENTINEL%" rd /s /q "%OBS_SENTINEL%" 2>nul
-if not exist "%OBS_SCENES_DIR%" mkdir "%OBS_SCENES_DIR%" 2>nul
-copy /Y "%OBS_SCENE_COLLECTION_SRC%" "%OBS_SCENES_DIR%\%OBS_SCENE_COLLECTION_NAME%.json" >nul
-if errorlevel 1 (
-    echo [ERROR] Failed to copy scene collection into "%OBS_SCENES_DIR%"
-    if "%PAUSE_ON_ERROR%"=="1" pause
-    exit /b 1
-)
-start "OBS Studio" /MIN /D "%OBS_DIR%" "%OBS_EXE%" %OBS_ARGS% --collection "%OBS_SCENE_COLLECTION_NAME%"
-
-echo Launching Stream Deck...
-start "Elgato Stream Deck" /MIN "%STREAMDECK_EXE%"
-
-if not "%LAUNCH_DELAY_SECONDS%"=="0" timeout /t %LAUNCH_DELAY_SECONDS% >nul
-
-echo Launching scoreboard...
-start "ReplayTrove Scoreboard" /D "%SCOREBOARD_DIR%" "%SCOREBOARD_PYTHONW%" "main.py"
-
-start "" powershell -NoProfile -WindowStyle Hidden -Command "Start-Sleep -Seconds %SCOREBOARD_FOCUS_DELAY_SECONDS%; $ws=New-Object -ComObject WScript.Shell; [void]$ws.AppActivate('ReplayTrove Scoreboard')"
-start "" powershell -NoProfile -WindowStyle Hidden -Command "$sig='[DllImport(\"user32.dll\")] public static extern bool ShowWindowAsync(IntPtr hWnd,int nCmdShow);'; Add-Type -MemberDefinition $sig -Name Win32Show -Namespace Native; 1..20 | %% { Start-Sleep -Milliseconds 500; Get-Process StreamDeck -ErrorAction SilentlyContinue | ? { $_.MainWindowHandle -ne 0 } | %% { [Native.Win32Show]::ShowWindowAsync($_.MainWindowHandle, 2) | Out-Null } }"
-
-echo All apps launched.
-exit /b 0
+set "PS=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+"%PS%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_apps.ps1"
+exit /b %ERRORLEVEL%
