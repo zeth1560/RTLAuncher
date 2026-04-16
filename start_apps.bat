@@ -9,6 +9,7 @@ rem --- Paths (override here if your install differs) ---
 set "REPLAYTROVE_WORKER_DIR=C:\ReplayTrove\worker"
 set "REPLAYTROVE_SCOREBOARD_DIR=C:\ReplayTrove\scoreboard"
 set "REPLAYTROVE_LOGS2DROPBOX_DIR=C:\ReplayTrove\logs2dropbox"
+set "REPLAYTROVE_ENCODER_DIR=C:\ReplayTrove\encoder"
 set "REPLAYTROVE_CLEANER_SCRIPT=C:\ReplayTrove\cleaner\cleaner-bee.ps1"
 set "REPLAYTROVE_OBS_DIR=C:\Program Files\obs-studio\bin\64bit"
 set "REPLAYTROVE_OBS_EXE=%REPLAYTROVE_OBS_DIR%\obs64.exe"
@@ -23,6 +24,15 @@ rem set "REPLAYTROVE_PAUSE_ON_ERROR=0"
 
 rem Production uses pythonw.exe (no consoles). For visible Python errors use debug:
 rem set "REPLAYTROVE_LAUNCHER_DEBUG=1"
+rem Optional per-app toggles (1=enabled, 0=disabled):
+rem set "REPLAYTROVE_ENABLE_WORKER=1"
+rem set "REPLAYTROVE_ENABLE_LOGS2DROPBOX=1"
+rem set "REPLAYTROVE_ENABLE_ENCODER=1"
+rem set "REPLAYTROVE_ENABLE_CLEANER=1"
+rem set "REPLAYTROVE_ENABLE_OBS=1"
+rem set "REPLAYTROVE_ENABLE_STREAMDECK=1"
+rem set "REPLAYTROVE_ENABLE_SCOREBOARD=1"
+rem set "REPLAYTROVE_ENABLE_LAUNCHER_UI=1"
 
 rem Optional tuning — see start_apps.ps1 for meaning (seconds / milliseconds).
 rem set "REPLAYTROVE_READINESS_OBS_SEC=120"
