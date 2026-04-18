@@ -6,6 +6,10 @@
   Configure paths via environment (set in start_apps.bat) or defaults below.
   REPLAYTROVE_LAUNCHER_DEBUG=1  -> use python.exe and normal windows for Python apps.
   REPLAYTROVE_PAUSE_ON_ERROR=0 -> do not pause on validation failure (e.g. scheduled task).
+
+  When Scoreboard, Encoder, and OBS are all enabled, an interactive session keeps running after
+  validation and polls scoreboard_status.json (screensaver_active). Screensaver on stops Encoder+OBS;
+  screensaver off restarts them. REPLAYTROVE_SCOREBOARD_STATUS_WATCH=0 disables; =1 forces on.
 #>
 
 $ErrorActionPreference = 'Stop'
@@ -59,6 +63,9 @@ $ReadinessPythonSec = if ($env:REPLAYTROVE_READINESS_PYTHON_SEC) { [int]$env:REP
 $ReadinessIntervalSec = if ($env:REPLAYTROVE_READINESS_INTERVAL_SEC) { [int]$env:REPLAYTROVE_READINESS_INTERVAL_SEC } else { 1 }
 $FocusMaxAttempts = if ($env:REPLAYTROVE_FOCUS_MAX_ATTEMPTS) { [int]$env:REPLAYTROVE_FOCUS_MAX_ATTEMPTS } else { 40 }
 $FocusRetryMs = if ($env:REPLAYTROVE_FOCUS_RETRY_MS) { [int]$env:REPLAYTROVE_FOCUS_RETRY_MS } else { 500 }
+
+$ScoreboardStatusJson = if ($env:REPLAYTROVE_SCOREBOARD_STATUS_JSON) { $env:REPLAYTROVE_SCOREBOARD_STATUS_JSON } else { Join-Path $PSScriptRoot 'scoreboard_status.json' }
+$ScoreboardStatusPollSec = if ($env:REPLAYTROVE_SCOREBOARD_STATUS_POLL_SEC) { [int]$env:REPLAYTROVE_SCOREBOARD_STATUS_POLL_SEC } else { 2 }
 
 $LogDir = Join-Path $PSScriptRoot 'logs'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
@@ -153,6 +160,117 @@ function Invoke-ScoreboardFocus {
   return $false
 }
 
+function Test-ScoreboardStatusWatchDesired {
+  if (-not ($EnableScoreboard -and $EnableEncoder -and $EnableObs)) { return $false }
+  $raw = [Environment]::GetEnvironmentVariable('REPLAYTROVE_SCOREBOARD_STATUS_WATCH')
+  if ([string]::IsNullOrWhiteSpace($raw)) {
+    return [Environment]::UserInteractive
+  }
+  switch ($raw.Trim().ToLowerInvariant()) {
+    '1' { return $true }
+    'true' { return $true }
+    'yes' { return $true }
+    'on' { return $true }
+    '0' { return $false }
+    'false' { return $false }
+    'no' { return $false }
+    'off' { return $false }
+    default { return [Environment]::UserInteractive }
+  }
+}
+
+function Read-ScoreboardScreensaverActive {
+  param([string]$Path)
+  if (-not (Test-Path -LiteralPath $Path)) { return $null }
+  try {
+    $raw = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop
+    $j = $raw | ConvertFrom-Json
+    if ($null -eq $j -or $null -eq $j.PSObject.Properties['screensaver_active']) { return $null }
+    return [bool]$j.screensaver_active
+  } catch {
+    return $null
+  }
+}
+
+function Stop-EncoderStackForLauncher {
+  $leaf = Split-Path -Path $EncoderDir -Leaf
+  $names = @('encoder_watchdog.py', 'operator_long_only.py', 'operator_tk.py')
+  $procs = Get-CimInstance Win32_Process -Filter "Name = 'python.exe' OR Name = 'pythonw.exe'" -ErrorAction SilentlyContinue
+  foreach ($p in $procs) {
+    $cmd = $p.CommandLine
+    if (-not $cmd -or $cmd -notlike "*\$leaf\*") { continue }
+    foreach ($sn in $names) {
+      if ($cmd -like "*$sn*") {
+        try { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue } catch { }
+        break
+      }
+    }
+  }
+}
+
+function Stop-Obs64ForLauncher {
+  Get-Process -Name 'obs64' -ErrorAction SilentlyContinue | ForEach-Object {
+    try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch { }
+  }
+}
+
+function Start-EncoderWatchdogForLauncher {
+  Start-Process -WorkingDirectory $EncoderDir -FilePath $pyEncoder -ArgumentList @('encoder_watchdog.py') -WindowStyle $pyWindowStyle | Out-Null
+}
+
+function Start-ObsForLauncher {
+  if (Test-Path -LiteralPath $ObsSentinel) {
+    try {
+      Remove-Item -LiteralPath $ObsSentinel -Recurse -Force -ErrorAction Stop
+    } catch {
+      Write-LauncherLog "WARN: could not remove OBS sentinel before restart: $($_.Exception.Message)"
+    }
+  }
+  Start-Process -WorkingDirectory $ObsDir -FilePath $ObsExe -ArgumentList $obsArgs -WindowStyle Minimized | Out-Null
+}
+
+function Invoke-ScoreboardStatusWatchLoop {
+  param(
+    [string]$StatusPath,
+    [int]$PollSec
+  )
+  Write-LauncherLog "Scoreboard status watch started (poll every ${PollSec}s): $StatusPath"
+  $lastScreensaver = $null
+  while ($true) {
+    $current = Read-ScoreboardScreensaverActive -Path $StatusPath
+    if ($null -eq $current) {
+      Start-Sleep -Seconds $PollSec
+      continue
+    }
+    if ($null -eq $lastScreensaver) {
+      if ($current) {
+        Write-LauncherLog 'Initial scoreboard status: screensaver active; stopping Encoder and OBS.'
+        Stop-EncoderStackForLauncher
+        Stop-Obs64ForLauncher
+      }
+      $lastScreensaver = $current
+      Start-Sleep -Seconds $PollSec
+      continue
+    }
+    if ($current -eq $lastScreensaver) {
+      Start-Sleep -Seconds $PollSec
+      continue
+    }
+    $lastScreensaver = $current
+    if ($current) {
+      Write-LauncherLog 'Scoreboard entered screensaver; stopping Encoder and OBS.'
+      Stop-EncoderStackForLauncher
+      Stop-Obs64ForLauncher
+    } else {
+      Write-LauncherLog 'Scoreboard left screensaver; restarting Encoder and OBS.'
+      Start-EncoderWatchdogForLauncher
+      Start-Sleep -Milliseconds 400
+      Start-ObsForLauncher
+    }
+    Start-Sleep -Seconds $PollSec
+  }
+}
+
 function Invoke-StreamDeckMinimize {
   param([int]$MaxAttempts, [int]$RetryMs)
   Add-Type -Namespace Win32 -Name Show -MemberDefinition @'
@@ -198,7 +316,7 @@ if ($EnableLogs2Dropbox) {
   $preflight += @{ Path = $pyLogs; Label = 'logs2dropbox venv Python' }
 }
 if ($EnableEncoder) {
-  $preflight += @{ Path = (Join-Path $EncoderDir 'operator_long_only.py'); Label = 'Encoder operator_long_only.py' }
+  $preflight += @{ Path = (Join-Path $EncoderDir 'encoder_watchdog.py'); Label = 'Encoder encoder_watchdog.py' }
   $preflight += @{ Path = $pyEncoder; Label = 'Encoder venv Python' }
 }
 if ($EnableCleaner) {
@@ -251,8 +369,8 @@ if ($EnableLogs2Dropbox) {
 }
 
 if ($EnableEncoder) {
-  Write-LauncherLog 'Launching encoder operator...'
-  Start-Process -WorkingDirectory $EncoderDir -FilePath $pyEncoder -ArgumentList @('operator_long_only.py') -WindowStyle $pyWindowStyle | Out-Null
+  Write-LauncherLog 'Launching encoder watchdog...'
+  Start-Process -WorkingDirectory $EncoderDir -FilePath $pyEncoder -ArgumentList @('encoder_watchdog.py') -WindowStyle $pyWindowStyle | Out-Null
 } else {
   Write-LauncherLog 'Skipping encoder (disabled by REPLAYTROVE_ENABLE_ENCODER=0)'
 }
@@ -295,8 +413,8 @@ if ($EnableLogs2Dropbox) {
 }
 
 if ($EnableEncoder) {
-  $encoderReady = Wait-Readiness -Label 'Encoder (python operator_long_only.py)' -TimeoutSec $ReadinessPythonSec -IntervalSec $ReadinessIntervalSec -Test {
-    Test-PythonAppRunning -FolderPath $EncoderDir -ScriptName 'operator_long_only.py'
+  $encoderReady = Wait-Readiness -Label 'Encoder (python encoder_watchdog.py)' -TimeoutSec $ReadinessPythonSec -IntervalSec $ReadinessIntervalSec -Test {
+    Test-PythonAppRunning -FolderPath $EncoderDir -ScriptName 'encoder_watchdog.py'
   }
   if (-not $encoderReady) {
     Write-LauncherLog 'ERROR: Encoder process not detected in time'
@@ -355,7 +473,7 @@ Write-LauncherLog 'Post-launch validation...'
 $validation = [ordered]@{}
 if ($EnableWorker) { $validation['Worker'] = { Test-PythonAppRunning -FolderPath $WorkerDir } }
 if ($EnableLogs2Dropbox) { $validation['logs2dropbox'] = { Test-PythonAppRunning -FolderPath $Logs2DropboxDir } }
-if ($EnableEncoder) { $validation['Encoder'] = { Test-PythonAppRunning -FolderPath $EncoderDir -ScriptName 'operator_long_only.py' } }
+if ($EnableEncoder) { $validation['Encoder'] = { Test-PythonAppRunning -FolderPath $EncoderDir -ScriptName 'encoder_watchdog.py' } }
 if ($EnableScoreboard) { $validation['Scoreboard'] = { Test-PythonAppRunning -FolderPath $ScoreboardDir } }
 if ($EnableObs) { $validation['OBS'] = { $null -ne (Get-Process -Name 'obs64' -ErrorAction SilentlyContinue) } }
 if ($EnableStreamDeck) { $validation['StreamDeck'] = { $null -ne (Get-Process -Name 'StreamDeck' -ErrorAction SilentlyContinue) } }
@@ -414,4 +532,15 @@ if ($EnableStreamDeck) {
 }
 
 Write-LauncherLog 'All apps launched and validated.'
+
+if (Test-ScoreboardStatusWatchDesired) {
+  try {
+    Invoke-ScoreboardStatusWatchLoop -StatusPath $ScoreboardStatusJson -PollSec $ScoreboardStatusPollSec
+  } catch {
+    Write-LauncherLog "Scoreboard status watch terminated: $($_.Exception.Message)"
+    Wait-LauncherAck 'Scoreboard status watch error; press Enter to exit'
+    exit 3
+  }
+}
+
 exit 0

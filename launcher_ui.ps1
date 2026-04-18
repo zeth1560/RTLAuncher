@@ -35,6 +35,23 @@ function Test-PythonScriptRunning {
   return (Get-MatchingPythonProcesses -FolderPath $FolderPath -ScriptName $ScriptName).Count -gt 0
 }
 
+function Test-EncoderStackRunning {
+  param([string]$FolderPath)
+  foreach ($sn in @('encoder_watchdog.py', 'operator_long_only.py', 'operator_tk.py')) {
+    if (Test-PythonScriptRunning -FolderPath $FolderPath -ScriptName $sn) { return $true }
+  }
+  return $false
+}
+
+function Get-EncoderStackPythonProcesses {
+  param([string]$FolderPath)
+  $all = @()
+  foreach ($sn in @('encoder_watchdog.py', 'operator_long_only.py', 'operator_tk.py')) {
+    $all += Get-MatchingPythonProcesses -FolderPath $FolderPath -ScriptName $sn
+  }
+  return @($all | Sort-Object -Property ProcessId -Unique)
+}
+
 function Get-MatchingPowerShellScriptProcesses {
   param([string]$ScriptPath)
   $leaf = Split-Path -Path $ScriptPath -Leaf
@@ -87,6 +104,7 @@ $ObsExe = Join-Path $ObsDir 'obs64.exe'
 $ObsSentinel = Join-Path $env:APPDATA 'obs-studio\.sentinel'
 $StreamDeckExe = 'C:\Program Files\Elgato\StreamDeck\StreamDeck.exe'
 $CleanerScript = 'C:\ReplayTrove\cleaner\cleaner-bee.ps1'
+$EncoderDir = if ($env:REPLAYTROVE_ENCODER_DIR) { $env:REPLAYTROVE_ENCODER_DIR } else { 'C:\ReplayTrove\encoder' }
 $LauncherUiBat = Join-Path $PSScriptRoot 'launcher_ui.bat'
 $LauncherUiPs1 = Join-Path $PSScriptRoot 'launcher_ui.ps1'
 
@@ -129,9 +147,9 @@ $apps = @(
   @{
     Name = 'Encoder'
     Env = 'REPLAYTROVE_ENABLE_ENCODER'
-    IsRunning = { Test-PythonScriptRunning -FolderPath 'C:\ReplayTrove\encoder' -ScriptName 'operator_long_only.py' }
-    Start = { Start-PythonScript -FolderPath 'C:\ReplayTrove\encoder' -ScriptName 'operator_long_only.py' }
-    Stop = { Stop-ProcessList -Processes (Get-MatchingPythonProcesses -FolderPath 'C:\ReplayTrove\encoder' -ScriptName 'operator_long_only.py') }
+    IsRunning = { Test-EncoderStackRunning -FolderPath $EncoderDir }
+    Start = { Start-PythonScript -FolderPath $EncoderDir -ScriptName 'encoder_watchdog.py' }
+    Stop = { Stop-ProcessList -Processes (Get-EncoderStackPythonProcesses -FolderPath $EncoderDir) }
   }
   @{
     Name = 'Cleaner Bee'

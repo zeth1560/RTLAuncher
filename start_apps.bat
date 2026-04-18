@@ -34,6 +34,12 @@ rem set "REPLAYTROVE_ENABLE_STREAMDECK=1"
 rem set "REPLAYTROVE_ENABLE_SCOREBOARD=1"
 rem set "REPLAYTROVE_ENABLE_LAUNCHER_UI=1"
 
+rem Scoreboard screensaver: when Encoder+OBS+Scoreboard are enabled, interactive runs of this
+rem batch keep start_apps.ps1 open and poll scoreboard_status.json — Encoder/OBS stop in
+rem screensaver and restart when active again. Task Scheduler: set REPLAYTROVE_SCOREBOARD_STATUS_WATCH=0
+rem unless you want a blocking watch. Optional: REPLAYTROVE_SCOREBOARD_STATUS_JSON, POLL_SEC.
+rem set "REPLAYTROVE_SCOREBOARD_STATUS_WATCH=0"
+
 rem Optional tuning — see start_apps.ps1 for meaning (seconds / milliseconds).
 rem set "REPLAYTROVE_READINESS_OBS_SEC=120"
 rem set "REPLAYTROVE_READINESS_PYTHON_SEC=90"
